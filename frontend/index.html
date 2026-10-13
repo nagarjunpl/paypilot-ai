@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>PayPilot AI</title>
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--tx:#0b1f3a;--mut:#667;--pri:#0070e0;--ok:#0a8a4a;--warn:#c25e00}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1220;--card:#131c2e;--tx:#e8eefc;--mut:#9aa7c0}}
+*{box-sizing:border-box}body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:640px;margin:auto;padding:16px}h1{margin:8px 0 0}p.s{color:var(--mut);margin:4px 0 16px}
+.card{background:var(--card);border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 4px #0002}
+input,textarea{width:100%;padding:12px;margin:6px 0;border:1px solid #8884;border-radius:8px;background:transparent;color:inherit;font:inherit}
+button{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:12px 16px;font:inherit;margin:4px 4px 0 0}
+button.g{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+.row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #8882}
+.b{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--ok);color:#fff;font-size:13px}
+.hide{display:none}small{color:var(--mut)}
+</style></head><body><main>
+<h1>PayPilot AI</h1><p class="s">Intelligent PayPal payment support</p>
+<div class="card">
+<textarea id="msg" rows="3" placeholder="My payment was deducted but my order wasn't confirmed."></textarea>
+<input id="oid" placeholder="PayPal Order ID (e.g. 5O190127TN364715T)">
+<button onclick="go()">Investigate</button></div>
+<div id="out" class="card hide"></div>
+<div class="card"><b>Sandbox demo tools</b><br><small>Create an order, approve it as your sandbox buyer, then capture.</small><br>
+<button class="g" onclick="mk()">1. Create $25 order</button>
+<button class="g" onclick="cap()">2. Capture</button><div id="demo"></div></div>
+</main><script>
+let last=null,ord=null;const $=i=>document.getElementById(i);
+const api=async(u,o)=>{const r=await fetch(u,o);const d=await r.json();if(!r.ok)throw d.detail||'Error';return d};
+async function go(){const o=$('out');o.className='card';o.textContent='Investigating…';
+try{const d=await api('/api/investigate',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({message:$('msg').value,order_id:$('oid').value||null})});
+if(d.needs_order_id){o.textContent=d.reply;return}
+last=d;const a=d.analysis,x=d.order;
+o.innerHTML=(x?`<span class="b">${x.status}</span>
+<div class="row"><span>Order</span><span>${x.order_id}</span></div>
+<div class="row"><span>Amount</span><span>${x.amount} ${x.currency}</span></div>
+<div class="row"><span>Intent</span><span>${x.intent}</span></div>`:'<b>Order not found</b>')+
+`<h3>${a.summary}</h3><p>${a.diagnosis}</p><p><b>Next:</b> ${a.recommended_action}</p>
+<small>Confidence ${a.confidence}% · Priority ${a.priority} · ${a.engine}</small><br>
+${a.escalate?'<p><b>⚠ Human support recommended</b></p>':''}
+<button onclick="cs()">Create Support Case</button>`}catch(e){o.textContent=e}}
+async function cs(){const c=await api('/api/cases',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({order_id:last.order_id,customer_query:$('msg').value,paypal_status:last.order?.status||null,analysis:last.analysis})});
+$('out').insertAdjacentHTML('beforeend',`<p>✅ Case <b>${c.case_id}</b> created</p>`)}
+async function mk(){try{ord=await api('/api/paypal/create-order',{method:'POST'});$('oid').value=ord.order_id;
+$('demo').innerHTML=`<p>Order <b>${ord.order_id}</b><br><a href="${ord.approve_url}" target="_blank">Approve as sandbox buyer ↗</a></p>`}catch(e){$('demo').textContent=e}}
+async function cap(){try{const d=await api('/api/paypal/capture-order/'+$('oid').value,{method:'POST'});
+$('demo').innerHTML=`<p>Captured: <b>${d.status}</b></p>`}catch(e){$('demo').textContent=e}}
+</script></body></html>
